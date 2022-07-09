@@ -7,68 +7,35 @@ import { KeyValueStore } from "../core/KeyValueStore";
 import { LokiOps } from "../core/Operator";
 import { Resultset } from "../core/ResultSet";
 import { aeqHelper, ltHelper, gtHelper, Comparators } from "../utils/compare";
+import { ENV_TYPE } from "../utils/env";
 import { LokiEventEmitter } from "../utils/events";
 import { deepFreeze, freeze, unFreeze, Utils } from "../utils/objects";
+import { defaultPersistence, persistenceMethods } from "./Persistence";
 
 
+export class LokiTS {
 
+  filename: string;
+  collections: any[];
 
-/**
- * Loki: The main database class
- * @constructor Loki
- * @implements LokiEventEmitter
- * @param {string} filename - name of the file to be saved to
- * @param {object=} options - (Optional) config options object
- * @param {string} options.env - override environment detection as 'NODEJS', 'BROWSER', 'CORDOVA'
- * @param {boolean} [options.verbose=false] - enable console output
- * @param {boolean} [options.autosave=false] - enables autosave
- * @param {int} [options.autosaveInterval=5000] - time interval (in milliseconds) between saves (if dirty)
- * @param {boolean} [options.autoload=false] - enables autoload on loki instantiation
- * @param {function} options.autoloadCallback - user callback called after database load
- * @param {adapter} options.adapter - an instance of a loki persistence adapter
- * @param {string} [options.serializationMethod='normal'] - ['normal', 'pretty', 'destructured']
- * @param {string} options.destructureDelimiter - string delimiter used for destructured serialization
- * @param {boolean} [options.throttledSaves=true] - debounces multiple calls to to saveDatabase reducing number of disk I/O operations
-                                            and guaranteeing proper serialization of the calls.
- */
-function ShieldLoki(filename, options) {
-  this.filename = filename || 'loki.db';
-  this.collections = [];
+  databaseVersion = 1.5;
+  engineVersion = 1.5;
 
-  // persist version of code which created the database to the database.
-  // could use for upgrade scenarios
-  this.databaseVersion = 1.5;
-  this.engineVersion = 1.5;
+  autosave = false;
+  autosaveInterval = 5000;
+  autosaveHandle = null;
+  throttledSaves = true;
 
-  // autosave support (disabled by default)
-  // pass autosave: true, autosaveInterval: 6000 in options to set 6 second autosave
-  this.autosave = false;
-  this.autosaveInterval = 5000;
-  this.autosaveHandle = null;
-  this.throttledSaves = true;
+  persistenceMethod = null;
 
-  this.options = {};
+  persistenceAdapter = null;
+  throttledSavePending = false;
+  throttledCallbacks = [];
+  options ={};
 
-  // currently keeping persistenceMethod and persistenceAdapter as loki level properties that
-  // will not or cannot be deserialized.  You are required to configure persistence every time
-  // you instantiate a loki object (or use default environment detection) in order to load the database anyways.
+  verbose: boolean;
 
-  // persistenceMethod could be 'fs', 'localStorage', or 'adapter'
-  // this is optional option param, otherwise environment detection will be used
-  // if user passes their own adapter we will force this method to 'adapter' later, so no need to pass method option.
-  this.persistenceMethod = null;
-
-  // retain reference to optional (non-serializable) persistenceAdapter 'instance'
-  this.persistenceAdapter = null;
-
-  // flags used to throttle saves
-  this.throttledSavePending = false;
-  this.throttledCallbacks = [];
-
-  // enable console output if verbose flag is set (disabled by default)
-  this.verbose = options && options.hasOwnProperty('verbose') ? options.verbose : false;
-
-  this.events = {
+  event: {
     'init': [],
     'loaded': [],
     'flushChanges': [],
@@ -77,66 +44,27 @@ function ShieldLoki(filename, options) {
     'warning': []
   };
 
-  var getENV = function () {
-    if (typeof global !== 'undefined' && (global.android || global.NSObject)) {
-      // If no adapter assume nativescript which needs adapter to be passed manually
-      return 'NATIVESCRIPT'; //nativescript
-    }
 
-    if (typeof window === 'undefined') {
-      return 'NODEJS';
-    }
+  ENV: ENV_TYPE;
 
-    if (typeof global !== 'undefined' && global.window && typeof process !== 'undefined') {
-      return 'NODEJS'; //node-webkit
-    }
 
-    if (typeof document !== 'undefined') {
-      if (document.URL.indexOf('http://') === -1 && document.URL.indexOf('https://') === -1) {
-        return 'CORDOVA';
-      }
-      return 'BROWSER';
-    }
-    return 'CORDOVA';
-  };
+  constructor(filename: string, options: any) {
+    options = options || {};
+    this.filename = filename || 'loki.db';
+    this.collections = [];
 
-  // refactored environment detection due to invalid detection for browser environments.
-  // if they do not specify an options.env we want to detect env rather than default to nodejs.
-  // currently keeping two properties for similar thing (options.env and options.persistenceMethod)
-  //   might want to review whether we can consolidate.
-  if (options && options.hasOwnProperty('env')) {
-    this.ENV = options.env;
-  } else {
-    this.ENV = getENV();
+    // enable console output if verbose flag is set (disabled by default)
+    this.verbose = options.hasOwnProperty('verbose') ? options.verbose : false;
+
+
+    this.ENV = options.hasOwnProperty('verbose') ? options.env : ENV_TYPE.BROWSER;
+
+
+    this.configureOptions(options, true);
+
+    this.on('init', this.clearChanges);
+
   }
-
-  // not sure if this is necessary now that i have refactored the line above
-  if (this.ENV === 'undefined') {
-    this.ENV = 'NODEJS';
-  }
-
-  this.configureOptions(options, true);
-
-  this.on('init', this.clearChanges);
-
-}
-
-// db class is an EventEmitter
-ShieldLoki.prototype = new LokiEventEmitter();
-ShieldLoki.prototype.constructor = ShieldLoki;
-
-// experimental support for browserify's abstract syntax scan to pick up dependency of indexed adapter.
-// Hopefully, once this hits npm a browserify require of lokijs should scan the main file and detect this indexed adapter reference.
-ShieldLoki.prototype.getIndexedAdapter = function () {
-  var adapter;
-
-  if (typeof require === 'function') {
-    adapter = require("./loki-indexed-adapter.js");
-  }
-
-  return adapter;
-};
-
 
 /**
  * Allows reconfiguring database options
@@ -154,18 +82,8 @@ ShieldLoki.prototype.getIndexedAdapter = function () {
  * @param {boolean} initialConfig - (internal) true is passed when loki ctor is invoking
  * @memberof Loki
  */
-ShieldLoki.prototype.configureOptions = function (options, initialConfig) {
-  var defaultPersistence = {
-    'NODEJS': 'fs',
-    'BROWSER': 'localStorage',
-    'CORDOVA': 'localStorage',
-    'MEMORY': 'memory'
-  },
-    persistenceMethods = {
-      'fs': LokiFsAdapter,
-      'localStorage': LokiLocalStorageAdapter,
-      'memory': LokiMemoryAdapter
-    };
+ configureOptions (options, initialConfig) {
+
 
   this.options = {};
 
@@ -247,6 +165,78 @@ ShieldLoki.prototype.configureOptions = function (options, initialConfig) {
   }
 
 };
+
+
+  /**
+ * (Changes API) : clears all the changes in all collections.
+ * @memberof Loki
+ */
+  clearChanges() {
+    this.collections.forEach(function (coll) {
+      if (coll.flushChanges) {
+        coll.flushChanges();
+      }
+    });
+  }
+}
+
+
+interface IOptions {
+
+  env:ENV_TYPE.BROWSER,
+  verbose:false;
+  autosave?:false;
+  autosaveInterval?:5000;
+  autoload?:false;
+  autoloadCallback?:any;
+  adapter?:any;
+  serializationMethod?:SerializationType;
+  destructureDelimiter?:string;
+  throttledSaves?:boolean
+  [propName:string]: any
+}
+enum SerializationType {
+  normal, pretty, destructured
+}
+
+/**
+ * Loki: The main database class
+ * @constructor Loki
+ * @implements LokiEventEmitter
+ * @param {string} filename - name of the file to be saved to
+ * @param {object=} options - (Optional) config options object
+ * @param {string} options.env - override environment detection as 'NODEJS', 'BROWSER', 'CORDOVA'
+ * @param {boolean} [options.verbose=false] - enable console output
+ * @param {boolean} [options.autosave=false] - enables autosave
+ * @param {int} [options.autosaveInterval=5000] - time interval (in milliseconds) between saves (if dirty)
+ * @param {boolean} [options.autoload=false] - enables autoload on loki instantiation
+ * @param {function} options.autoloadCallback - user callback called after database load
+ * @param {adapter} options.adapter - an instance of a loki persistence adapter
+ * @param {string} [options.serializationMethod='normal'] - ['normal', 'pretty', 'destructured']
+ * @param {string} options.destructureDelimiter - string delimiter used for destructured serialization
+ * @param {boolean} [options.throttledSaves=true] - debounces multiple calls to to saveDatabase reducing number of disk I/O operations
+                                            and guaranteeing proper serialization of the calls.
+ */
+function ShieldLoki(filename, options) {
+
+}
+
+// db class is an EventEmitter
+ShieldLoki.prototype = new LokiEventEmitter();
+ShieldLoki.prototype.constructor = ShieldLoki;
+
+// experimental support for browserify's abstract syntax scan to pick up dependency of indexed adapter.
+// Hopefully, once this hits npm a browserify require of lokijs should scan the main file and detect this indexed adapter reference.
+ShieldLoki.prototype.getIndexedAdapter = function () {
+  var adapter;
+
+  if (typeof require === 'function') {
+    adapter = require("./loki-indexed-adapter.js");
+  }
+
+  return adapter;
+};
+
 
 /**
  * Copies 'this' database into a new Loki instance. Object references are shared to make lightweight.
@@ -1067,17 +1057,7 @@ ShieldLoki.prototype.serializeChanges = function (collectionNamesArray) {
   return JSON.stringify(this.generateChangesNotification(collectionNamesArray));
 };
 
-/**
- * (Changes API) : clears all the changes in all collections.
- * @memberof Loki
- */
-ShieldLoki.prototype.clearChanges = function () {
-  this.collections.forEach(function (coll) {
-    if (coll.flushChanges) {
-      coll.flushChanges();
-    }
-  });
-};
+
 
 /*------------------+
 | PERSISTENCE       |
