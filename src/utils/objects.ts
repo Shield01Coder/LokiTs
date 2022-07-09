@@ -31,7 +31,7 @@ export function unFreeze(obj:any) {
     return clone(obj, 'shallow');
 }
 
-var Utils = {
+export const  Utils = {
     copyProperties: function (src:any, dest:any) {
         var prop;
         for (prop in src) {

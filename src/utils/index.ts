@@ -2,6 +2,9 @@
   
       // wrapping in object to expose to default export for potential user override.
       // warning: overriding these methods will override behavior for all loki db instances in memory.
+
+import { Utils } from "./objects";
+
       // warning: if you use binary indices these comparators should be the same for all inserts/updates/removes.
       var Comparators = {
         aeq: aeqHelper,
@@ -18,7 +21,7 @@
        *     aeqHelper([1, 2, 3], [1, 2, 3]) === true
        *     aeqHelper(undefined, null) === true
        */
-      function aeqHelper(prop1, prop2) {
+      function aeqHelper(prop1:any, prop2:any): boolean {
         var cv1, cv2, t1, t2;
   
         if (prop1 === prop2) return true;
@@ -71,7 +74,7 @@
        *     Since binary indices on a property might need to index [12, NaN, new Date(), Infinity], we
        *     need this function (as well as gtHelper) to always ensure one value is LT, GT, or EQ to another.
        */
-      function ltHelper(prop1, prop2, equal) {
+      function ltHelper(prop1:any, prop2:any, equal:any) {
         var cv1, cv2, t1, t2;
   
         // if one of the params is falsy or strictly true or not equal to itself
@@ -614,122 +617,5 @@
         return result;
       }
   
-      function localStorageAvailable() {
-        try {
-          return (window && window.localStorage !== undefined && window.localStorage !== null);
-        } catch (e) {
-          return false;
-        }
-      }
+     
   
-  
-      /**
-       * LokiEventEmitter is a minimalist version of EventEmitter. It enables any
-       * constructor that inherits EventEmitter to emit events and trigger
-       * listeners that have been added to the event through the on(event, callback) method
-       *
-       * @constructor LokiEventEmitter
-       */
-      function LokiEventEmitter() { }
-  
-      /**
-       * @prop {hashmap} events - a hashmap, with each property being an array of callbacks
-       * @memberof LokiEventEmitter
-       */
-      LokiEventEmitter.prototype.events = {};
-  
-      /**
-       * @prop {boolean} asyncListeners - boolean determines whether or not the callbacks associated with each event
-       * should happen in an async fashion or not
-       * Default is false, which means events are synchronous
-       * @memberof LokiEventEmitter
-       */
-      LokiEventEmitter.prototype.asyncListeners = false;
-  
-      /**
-       * on(eventName, listener) - adds a listener to the queue of callbacks associated to an event
-       * @param {string|string[]} eventName - the name(s) of the event(s) to listen to
-       * @param {function} listener - callback function of listener to attach
-       * @returns {int} the index of the callback in the array of listeners for a particular event
-       * @memberof LokiEventEmitter
-       */
-      LokiEventEmitter.prototype.on = function (eventName, listener) {
-        var event;
-        var self = this;
-  
-        if (Array.isArray(eventName)) {
-          eventName.forEach(function (currentEventName) {
-            self.on(currentEventName, listener);
-          });
-          return listener;
-        }
-  
-        event = this.events[eventName];
-        if (!event) {
-          event = this.events[eventName] = [];
-        }
-        event.push(listener);
-        return listener;
-      };
-  
-      /**
-       * emit(eventName, data) - emits a particular event
-       * with the option of passing optional parameters which are going to be processed by the callback
-       * provided signatures match (i.e. if passing emit(event, arg0, arg1) the listener should take two parameters)
-       * @param {string} eventName - the name of the event
-       * @param {object=} data - optional object passed with the event
-       * @memberof LokiEventEmitter
-       */
-      LokiEventEmitter.prototype.emit = function (eventName) {
-        var self = this;
-        var selfArgs;
-        if (eventName && this.events[eventName]) {
-          if (this.events[eventName].length) {
-            selfArgs = Array.prototype.slice.call(arguments, 1);
-            this.events[eventName].forEach(function (listener) {
-              if (self.asyncListeners) {
-                setTimeout(function () {
-                  listener.apply(self, selfArgs);
-                }, 1);
-              } else {
-                listener.apply(self, selfArgs);
-              }
-            });
-          }
-        } else {
-          throw new Error('No event ' + eventName + ' defined');
-        }
-      };
-  
-      /**
-       * Alias of LokiEventEmitter.prototype.on
-       * addListener(eventName, listener) - adds a listener to the queue of callbacks associated to an event
-       * @param {string|string[]} eventName - the name(s) of the event(s) to listen to
-       * @param {function} listener - callback function of listener to attach
-       * @returns {int} the index of the callback in the array of listeners for a particular event
-       * @memberof LokiEventEmitter
-       */
-      LokiEventEmitter.prototype.addListener = LokiEventEmitter.prototype.on;
-  
-      /**
-       * removeListener() - removes the listener at position 'index' from the event 'eventName'
-       * @param {string|string[]} eventName - the name(s) of the event(s) which the listener is attached to
-       * @param {function} listener - the listener callback function to remove from emitter
-       * @memberof LokiEventEmitter
-       */
-      LokiEventEmitter.prototype.removeListener = function (eventName, listener) {
-        var self = this;
-  
-        if (Array.isArray(eventName)) {
-          eventName.forEach(function (currentEventName) {
-            self.removeListener(currentEventName, listener);
-          });
-  
-          return;
-        }
-  
-        if (this.events[eventName]) {
-          var listeners = this.events[eventName];
-          listeners.splice(listeners.indexOf(listener), 1);
-        }
-      };
