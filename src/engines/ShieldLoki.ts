@@ -1,7 +1,16 @@
 
 'use strict';
 
-var hasOwnProperty = Object.prototype.hasOwnProperty;
+import { Collection } from "../core/Collection";
+import { DynamicView } from "../core/DynamicView";
+import { KeyValueStore } from "../core/KeyValueStore";
+import { LokiOps } from "../core/Operator";
+import { Resultset } from "../core/ResultSet";
+import { aeqHelper, ltHelper, gtHelper, Comparators } from "../utils/compare";
+import { LokiEventEmitter } from "../utils/events";
+import { deepFreeze, freeze, unFreeze, Utils } from "../utils/objects";
+
+
 
 
 /**
@@ -1529,5 +1538,5 @@ ShieldLoki.aeq = aeqHelper;
 ShieldLoki.lt = ltHelper;
 ShieldLoki.gt = gtHelper;
 ShieldLoki.Comparators = Comparators;
-return ShieldLoki;
+
 

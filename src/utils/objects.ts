@@ -1,7 +1,7 @@
+import { clone } from "./clone";
 
-var hasOwnProperty = Object.prototype.hasOwnProperty;
 
-export function deepFreeze(obj:any) {
+export function deepFreeze(obj: any) {
     var prop, i;
     if (Array.isArray(obj)) {
         for (i = 0; i < obj.length; i++) {
@@ -18,28 +18,28 @@ export function deepFreeze(obj:any) {
     }
 }
 
-export function freeze(obj:any) {
+export function freeze(obj: any) {
     if (!Object.isFrozen(obj)) {
         Object.freeze(obj);
     }
 }
 
-export function unFreeze(obj:any) {
+export function unFreeze(obj: any) {
     if (!Object.isFrozen(obj)) {
         return obj;
     }
     return clone(obj, 'shallow');
 }
 
-export const  Utils = {
-    copyProperties: function (src:any, dest:any) {
+export const Utils = {
+    copyProperties: function (src: any, dest: any) {
         var prop;
         for (prop in src) {
             dest[prop] = src[prop];
         }
     },
     // used to recursively scan hierarchical transform step object for param substitution
-    resolveTransformObject: function (subObj, params, depth) {
+    resolveTransformObject: function (subObj, params, depth?: number) {
         var prop,
             pname;
 
@@ -101,7 +101,7 @@ export const  Utils = {
     // getIn({a: 1}, "a", true) => 1
     // getIn({a: {b: 1}}, ["a", "b"], true) => 1
     // getIn({a: {b: 1}}, "a.b", true) => 1
-    getIn: function (object, path, usingDotNotation) {
+    getIn: function (object, path, usingDotNotation?: any) {
         if (object == null) {
             return undefined;
         }

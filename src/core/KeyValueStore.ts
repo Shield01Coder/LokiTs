@@ -1,5 +1,6 @@
+import { BSonSort, binarySearch } from "../utils/helper";
 
-    function KeyValueStore() { }
+    export function KeyValueStore() { }
 
     KeyValueStore.prototype = {
       keys: [],
