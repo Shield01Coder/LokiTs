@@ -1,9 +1,13 @@
 import { clone } from "../utils/clone";
 import { Comparators } from "../utils/compare";
+import { LokiEventEmitter } from "../utils/events";
 import { average, deepProperty, hasOwnProperty, isDeepProperty, parseBase10, standardDeviation, sub } from "../utils/helper";
 import { deepFreeze, freeze, unFreeze, Utils } from "../utils/objects";
+import { DynamicView } from "./DynamicView";
+import { ExactIndex } from "./ExactIndex";
 import { LokiOps } from "./Operator";
 import { Resultset } from "./ResultSet";
+import { UniqueIndex } from "./UniqueIndex";
 
 
 /**
